@@ -15,12 +15,12 @@ const GODB_PORT = "2000"
 var db map[string]string
 
 var argc = map[string]int {
-	"copy"		:	2,
-	"del"		:	1,
-	"get"		:	1,
-	"quit"		:	0,
-	"rename"	:	2,
-	"set"		:	2,
+	"copy": 2,
+	"del": 1,
+	"get": 1,
+	"quit": 0,
+	"rename": 2,
+	"set": 2,
 }
 
 func GoSQL(sql string) (response string, status bool) {
