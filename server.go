@@ -6,8 +6,8 @@ import (
 	"os"
 	"net"
 	"io/ioutil"
-    "encoding/gob"
-    "bytes"
+	"encoding/gob"
+	"bytes"
 )
 
 const GODB_PORT = "2000"
