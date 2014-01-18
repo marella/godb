@@ -1,18 +1,21 @@
 package main
 
 import (
-	"fmt"
-	"strings"
-	"os"
-	"net"
-	"io/ioutil"
-	"encoding/gob"
 	"bytes"
+	"encoding/gob"
+	"fmt"
+	"io/ioutil"
+	"net"
+	"os"
+	"strings"
+	"sync"
 )
 
 const GODB_PORT = "2000"
 
 var db map[string]string
+
+var mutex = &sync.Mutex{}
 
 var argc = map[string]int {
 	"copy": 2,
@@ -24,9 +27,9 @@ var argc = map[string]int {
 }
 
 func GoSQL(sql string) (response string, status bool) {
-	response = "OK"
+	response = "1"
 	status = true
-	
+
 	sql = strings.Trim(sql, "; ")
 	
 	// find the command word
@@ -39,21 +42,25 @@ func GoSQL(sql string) (response string, status bool) {
 	// check if command is present and parameters count is matching
 	args := strings.Fields(sql)
 	if v, ok := argc[cmd]; !ok {
-		response = fmt.Sprintf("error: '%s' command not found", cmd)
+		response = "-C"
 		return
 	} else if len(args)-1 < v {
-		response = fmt.Sprintf("error: '%s' expects %d parameters but only %d given", cmd, v, len(args)-1)
+		response = "-A"
 		return
 	}
 
 	// run the query
+	mutex.Lock()
 	switch cmd {
 
 		case "copy":
+			if args[1] == args[2] {
+				break
+			}
 			if v, ok := db[args[1]]; ok {
 				db[args[2]] = v
 			} else {
-				response = fmt.Sprintf("error: '%s' is not set", args[1])
+				response = "-A"
 			}
 
 		case "del":
@@ -61,31 +68,33 @@ func GoSQL(sql string) (response string, status bool) {
 
 		case "get":
 			if v, ok := db[args[1]]; ok {
-				response = fmt.Sprint("return: ", v)
+				response = fmt.Sprint("R", v)
 			} else {
-				response = fmt.Sprintf("error: '%s' is not set", args[1])
+				response = "-K"
 			}
 
 		case "quit":
-			response = "connection closing"
 			status = false // to break the loop
-			return
 
 		case "rename":
+			if args[1] == args[2] {
+				break
+			}
 			if v, ok := db[args[1]]; ok {
 				db[args[2]] = v
 				delete(db, args[1])
 			} else {
-				response = fmt.Sprintf("error: '%s' is not set", args[1])
+				response = "-K"
 			}
 
 		case "set":
 			db[args[1]] = strings.Join(args[2:], " ")
 
 		default:
-			response = fmt.Sprintf("error: '%s' command not found", cmd)
+			response = "-C"
 
 	}
+	mutex.Unlock()
 	return
 }
 
@@ -100,7 +109,8 @@ func LoadDB() {
     // Decoding the serialized data
     err = d.Decode(&db)
     if err != nil {
-        panic(err)
+        //panic(err)
+        return
     }
 }
 
@@ -112,7 +122,8 @@ func SaveDB() {
     // Encoding the map
     err := e.Encode(db)
     if err != nil {
-        panic(err)
+        //panic(err)
+        return
     }
 	ioutil.WriteFile("db.txt", b.Bytes(), 0777)
 }
@@ -125,9 +136,6 @@ func MultiSQL(sql string) (response string, status bool) {
 	for i := 0; i < len(msql); i++ {
 		r, ok := GoSQL(msql[i])
 		response += r + "; "
-		if strings.HasPrefix(r, "error") {
-			return
-		}
 		if !ok {
 			status = false
 			return
@@ -136,22 +144,55 @@ func MultiSQL(sql string) (response string, status bool) {
 	return
 }
 
+func BigRead(conn net.Conn) (s string, ok bool) {
+	ok = false
+	s = ""
+	var buf [512]byte
+	n, err := conn.Read(buf[0:])
+	if err != nil {
+		return
+	}
+	size := int(buf[0])
+	s = string(buf[1:n])
+	for i := 0; i < size; i++ {
+		n, err = conn.Read(buf[0:])
+		if err != nil {
+			return
+		}
+		s += string(buf[:n])
+	}
+	ok = true
+	return
+}
+
+func BigWrite(conn net.Conn, s string) bool {
+	size := len(s) + 1
+	s = string(size/512) + s
+	i := 0
+	for ;i < size/512; i++ {
+		conn.Write([]byte(s[i*512 : (i+1)*512]))
+	}
+	conn.Write([]byte(s[i*512 : i*512 + size%512]))
+	return true
+}
+
 func handleClient(conn net.Conn) {
 
 	defer conn.Close()
 
-	var buf [512]byte
+	//var buf [512]byte
 	for {
-		n, err := conn.Read(buf[0:])
-		if err != nil {
+		sql, ok := BigRead(conn)
+		if !ok {
 			return
 		}
-		sql := string(buf[:n])
 		r, ok := MultiSQL(sql)
 		r = strings.Trim(r, "; ")
-		fmt.Fprintf(conn, r)
+		BigWrite(conn, r)
 		if !ok {
+			mutex.Lock()
 			SaveDB()
+			mutex.Unlock()
 			return
 		}
 	}
@@ -164,7 +205,6 @@ func main() {
 	checkError(err)
 
 	LoadDB()
-
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
