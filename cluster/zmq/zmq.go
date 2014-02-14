@@ -2,6 +2,7 @@ package zmq
 
 import (
 	"net"
+	"time"
 )
 
 const (
@@ -30,7 +31,11 @@ func (soc *Socket) Accept() (err error) {
 }
 
 func (soc *Socket) Connect(addr string) (err error) {
-	soc.conn, err = net.Dial("tcp", addr)
+	conn, err := net.DialTimeout("tcp", addr, 50 * time.Millisecond)
+	if isError(err) {
+		return
+	}
+	soc.conn = conn
 	return
 }
 

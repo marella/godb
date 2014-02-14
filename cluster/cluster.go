@@ -42,7 +42,7 @@ package cluster
 import (
 	"encoding/json"
 	"errors"
-	//"fmt"
+	// "fmt"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -256,7 +256,7 @@ func (c *Counter) Count() (x int64) {
 
 func isError(err error) bool {
 	if err != nil {
-		//fmt.Println("Error:", err.Error())
+		// fmt.Println("Error:", err.Error())
 		return true
 	}
 	return false

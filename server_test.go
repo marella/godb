@@ -39,4 +39,13 @@ func TestMain(t *testing.T) {
 	}
 	w.Wait()
 	fmt.Println("")
+
+	// now check if above queries went well
+	g := godb.New("127.0.0.1", "db_name")
+	r, ok := g.Query("get test[1][2]")
+	if ok {
+		fmt.Println("get test[1][2] returned:", r)
+	} else {
+		fmt.Println("Something went wrong. Test failed.")
+	}
 }
