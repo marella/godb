@@ -8,9 +8,63 @@ import (
 
 const (
 	WAITTIME = 500
-	N        = 10
+	N        = 1
 )
 
+func TestReplication(t *testing.T) {
+	fmt.Println("---------------------------------------------------")
+	fmt.Println("Begin Replication test:")
+
+	c, err := NewCluster("examples/raft")
+	if isError(err) {
+		t.Fatal("Error: Could not load cluster:", err.Error())
+	}
+	s := []Raft{}
+	var temp Raft
+	for j := 0; j < 5; j++ {
+		temp, _ = c.New(j + 1)
+		s = append(s, temp)
+		s[j].SetTerm(0)
+	}
+
+	prevLeader := 0
+	fmt.Println("Testing...")
+	for i := 0; i < N; i++ {
+		time.Sleep(WAITTIME * time.Millisecond)
+		count := 0
+		leader := 0
+		for j := 0; j < len(s); j++ {
+			if s[j].isLeader() {
+				count++
+				leader = j + 1
+				fmt.Println("Found leader")
+				s[j].Inbox() <- "LOG"
+				fmt.Println("Sent log item")
+				fmt.Println(<-s[j].Outbox())
+			}
+		}
+		if count == 0 {
+			t.Error("No leader elected yet!")
+		} else if count > 1 {
+			t.Fatal("Too many leaders!", count, "leaders elected")
+		}
+
+		if prevLeader != 0 && leader != prevLeader {
+			t.Error("Leader changed! prevLeader =", prevLeader, ", leader =", leader)
+		}
+
+		prevLeader = leader
+	}
+
+	if t.Failed() {
+		fmt.Println("Replication test FAILED.")
+	} else {
+		fmt.Println("Replication test PASSED.")
+	}
+	fmt.Println("---------------------------------------------------")
+}
+
+/*
 func TestBasic(t *testing.T) {
 	fmt.Println("---------------------------------------------------")
 	fmt.Println("Begin Basic test:")
@@ -195,3 +249,4 @@ func TestMajorityFailures(t *testing.T) {
 	}
 	fmt.Println("---------------------------------------------------")
 }
+*/

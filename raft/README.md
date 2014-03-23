@@ -21,3 +21,16 @@ MinorityFailures: Only 3 out of 5 servers are started and checks if above condit
 MajorityFailures: Only 2 out of 5 servers are started and checks if no leader is elected.
 <pre>go test github.com/marella/godb/raft -run MajorityFailures</pre>
 Note: Please run these tests separately and don't use <code>go test</code> as after a test finishes the ports are not yet freed!
+
+## Log Replication
+* Log entries are stored in the 'log' directory with '.log' file extensions for each server
+* On successful commit, the index of the log entry is returned
+* If the server is not leader an error message containing the Pid of leader is returned
+
+## Client API
+<pre>
+c, _ := raft.NewCluster("raft") // Load cluster
+s := c.New(pid) // Create server
+s.Inbox() &lt;- "LOG ITEM" // Send the log item
+response := &lt;-s.Outbox() // Read the response of above action
+</pre>
